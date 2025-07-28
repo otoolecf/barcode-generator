@@ -4,6 +4,24 @@ document.addEventListener('DOMContentLoaded', function() {
     // Clear any stored state on page load
     currentSVG = null;
     
+    // Reset all form controls to default values
+    document.getElementById('barcodeData').value = '123456789';
+    document.getElementById('barcodeType').value = 'code128';
+    document.getElementById('sizeMode').value = 'scale';
+    document.getElementById('scale').value = '3';
+    document.getElementById('scaleNumber').value = '3';
+    document.getElementById('pixelSize').value = '200';
+    document.getElementById('foregroundColor').value = '#000000';
+    document.getElementById('foregroundColorText').value = '#000000';
+    document.getElementById('backgroundColor').value = '#ffffff';
+    document.getElementById('backgroundColorText').value = '#ffffff';
+    document.getElementById('backgroundOpacity').value = '100';
+    document.getElementById('opacityNumber').value = '100';
+    document.getElementById('canvasSizeMode').value = 'auto';
+    document.getElementById('canvasWidth').value = '400';
+    document.getElementById('canvasHeight').value = '600';
+    document.getElementById('fileFormat').value = 'png';
+    
     const generateBtn = document.getElementById('generateBtn');
     const scaleSlider = document.getElementById('scale');
     const scaleNumber = document.getElementById('scaleNumber');
@@ -16,6 +34,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const foregroundColorText = document.getElementById('foregroundColorText');
     const backgroundColor = document.getElementById('backgroundColor');
     const backgroundColorText = document.getElementById('backgroundColorText');
+    const canvasSizeMode = document.getElementById('canvasSizeMode');
+    const customSizeGroup = document.getElementById('customSizeGroup');
     
     // Sync scale slider and number input
     scaleSlider.addEventListener('input', function() {
@@ -69,6 +89,38 @@ document.addEventListener('DOMContentLoaded', function() {
             pixelGroup.style.display = 'none';
         }
     });
+    
+    // Toggle between auto and custom canvas size
+    canvasSizeMode.addEventListener('change', function() {
+        if (this.value === 'custom') {
+            customSizeGroup.style.display = 'flex';
+        } else {
+            customSizeGroup.style.display = 'none';
+        }
+        // Regenerate barcode when switching canvas size mode
+        generateBarcode();
+    });
+    
+    // Auto-regenerate when custom canvas dimensions change
+    document.getElementById('canvasWidth').addEventListener('input', function() {
+        if (canvasSizeMode.value === 'custom') {
+            generateBarcode();
+        }
+    });
+    
+    document.getElementById('canvasHeight').addEventListener('input', function() {
+        if (canvasSizeMode.value === 'custom') {
+            generateBarcode();
+        }
+    });
+    
+    // Initialize UI visibility based on reset values
+    // Since we reset sizeMode to 'scale', show scale group and hide pixel group
+    scaleGroup.style.display = 'flex';
+    pixelGroup.style.display = 'none';
+    
+    // Since we reset canvasSizeMode to 'auto', hide custom size group
+    customSizeGroup.style.display = 'none';
     
     generateBtn.addEventListener('click', generateBarcode);
     
@@ -192,14 +244,44 @@ function generateBarcode() {
                 }
             }
             
-            // Calculate barcode dimensions with some padding
+            // Calculate barcode dimensions
             const barcodeWidth = maxX - minX + 1;
             const barcodeHeight = maxY - minY + 1;
-            const padding = 20;
             
-            // Set canvas size to fit the barcode with padding
-            canvas.width = barcodeWidth + (padding * 2);
-            canvas.height = barcodeHeight + (padding * 2);
+            // Determine canvas size based on mode
+            const canvasSizeMode = document.getElementById('canvasSizeMode').value;
+            let canvasWidth, canvasHeight;
+            
+            if (canvasSizeMode === 'custom') {
+                // Use custom dimensions
+                canvasWidth = parseInt(document.getElementById('canvasWidth').value) || 400;
+                canvasHeight = parseInt(document.getElementById('canvasHeight').value) || 600;
+                
+                // Check if barcode fits within custom dimensions
+                const margin = 20; // Minimum margin
+                if (barcodeWidth + margin > canvasWidth || barcodeHeight + margin > canvasHeight) {
+                    console.warn('Barcode is larger than custom canvas dimensions');
+                    // Show user warning
+                    const originalWidth = parseInt(document.getElementById('canvasWidth').value) || 400;
+                    const originalHeight = parseInt(document.getElementById('canvasHeight').value) || 600;
+                    // Calculate the actual expanded dimensions
+                    const expandedWidth = Math.max(canvasWidth, barcodeWidth + margin);
+                    const expandedHeight = Math.max(canvasHeight, barcodeHeight + margin);
+                    showWarning(`Barcode (${barcodeWidth}×${barcodeHeight}px) is larger than your custom canvas (${originalWidth}×${originalHeight}px). Canvas auto-expanded to ${expandedWidth}×${expandedHeight}px.`);
+                    // Auto-expand canvas to fit barcode if it's too large
+                    canvasWidth = expandedWidth;
+                    canvasHeight = expandedHeight;
+                }
+            } else {
+                // Auto-fit with padding
+                const padding = 20;
+                canvasWidth = barcodeWidth + (padding * 2);
+                canvasHeight = barcodeHeight + (padding * 2);
+            }
+            
+            // Set canvas size
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
             
             // Clear the canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -252,12 +334,39 @@ function generateBarcode() {
                 const transBarcodeWidth = transMaxX - transMinX + 1;
                 const transBarcodeHeight = transMaxY - transMinY + 1;
                 
-                // Resize canvas to fit the actual transparent barcode with padding
-                canvas.width = transBarcodeWidth + (padding * 2);
-                canvas.height = transBarcodeHeight + (padding * 2);
+                // Determine canvas size (same logic as above)
+                let transCanvasWidth, transCanvasHeight;
+                if (canvasSizeMode === 'custom') {
+                    transCanvasWidth = parseInt(document.getElementById('canvasWidth').value) || 400;
+                    transCanvasHeight = parseInt(document.getElementById('canvasHeight').value) || 600;
+                    
+                    // Check if barcode fits within custom dimensions
+                    const margin = 20;
+                    if (transBarcodeWidth + margin > transCanvasWidth || transBarcodeHeight + margin > transCanvasHeight) {
+                        console.warn('Transparent barcode is larger than custom canvas dimensions');
+                        // Show user warning
+                        const originalWidth = parseInt(document.getElementById('canvasWidth').value) || 400;
+                        const originalHeight = parseInt(document.getElementById('canvasHeight').value) || 600;
+                        // Calculate the actual expanded dimensions
+                        const transExpandedWidth = Math.max(transCanvasWidth, transBarcodeWidth + margin);
+                        const transExpandedHeight = Math.max(transCanvasHeight, transBarcodeHeight + margin);
+                        showWarning(`Barcode (${transBarcodeWidth}×${transBarcodeHeight}px) is larger than your custom canvas (${originalWidth}×${originalHeight}px). Canvas auto-expanded to ${transExpandedWidth}×${transExpandedHeight}px.`);
+                        // Auto-expand canvas to fit barcode if it's too large
+                        transCanvasWidth = transExpandedWidth;
+                        transCanvasHeight = transExpandedHeight;
+                    }
+                } else {
+                    const padding = 20;
+                    transCanvasWidth = transBarcodeWidth + (padding * 2);
+                    transCanvasHeight = transBarcodeHeight + (padding * 2);
+                }
+                
+                // Resize canvas
+                canvas.width = transCanvasWidth;
+                canvas.height = transCanvasHeight;
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 
-                // Calculate center position based on new canvas size
+                // Calculate center position based on canvas size
                 const transCenterX = (canvas.width - transBarcodeWidth) / 2;
                 const transCenterY = (canvas.height - transBarcodeHeight) / 2;
                 
@@ -553,9 +662,24 @@ function showError(message) {
     const errorElement = document.getElementById('errorMessage');
     errorElement.textContent = message;
     errorElement.classList.add('show');
+    errorElement.style.backgroundColor = '#f8d7da';
+    errorElement.style.color = '#dc3545';
+    errorElement.style.borderColor = '#f5c6cb';
     setTimeout(() => {
         errorElement.classList.remove('show');
     }, 5000);
+}
+
+function showWarning(message) {
+    const errorElement = document.getElementById('errorMessage');
+    errorElement.textContent = message;
+    errorElement.classList.add('show');
+    errorElement.style.backgroundColor = '#fff3cd';
+    errorElement.style.color = '#856404';
+    errorElement.style.borderColor = '#ffeaa7';
+    setTimeout(() => {
+        errorElement.classList.remove('show');
+    }, 7000); // Show warnings a bit longer since they're informational
 }
 
 function parseColor(color) {

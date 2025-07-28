@@ -204,6 +204,41 @@ input[type="range"] {
     flex: 1;
 }
 
+.canvas-size-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.custom-size-group {
+    display: flex;
+    gap: 1rem;
+    margin-top: 0.5rem;
+}
+
+.dimension-input {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+}
+
+.dimension-input label {
+    font-size: 14px;
+    font-weight: normal;
+    min-width: 50px;
+}
+
+.dimension-input input[type="number"] {
+    flex: 1;
+    min-width: 80px;
+}
+
+.dimension-input span {
+    font-size: 14px;
+    color: #666;
+}
+
 .error-message {
     color: #dc3545;
     background-color: #f8d7da;

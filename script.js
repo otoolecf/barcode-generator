@@ -383,40 +383,52 @@ function generateBarcode() {
             } else {
                 // For full opacity or full transparency, draw barcode centered
                 if (backgroundOpacity === 1) {
-                    // Full background - regenerate with background on properly sized canvas
-                    bwipjs.toCanvas(canvas, options);
+                    // Full background - generate on temp canvas then draw centered with background
+                    const fullOpacityCanvas = document.createElement('canvas');
+                    fullOpacityCanvas.width = tempCanvas.width;
+                    fullOpacityCanvas.height = tempCanvas.height;
                     
-                    // Get the regenerated barcode bounds
-                    const finalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    const finalData = finalImageData.data;
+                    // Generate barcode with background on temp canvas
+                    bwipjs.toCanvas(fullOpacityCanvas, options);
                     
-                    let finalMinX = canvas.width, finalMinY = canvas.height;
-                    let finalMaxX = 0, finalMaxY = 0;
+                    // Get the actual barcode bounds from the full opacity canvas
+                    const fullCtx = fullOpacityCanvas.getContext('2d');
+                    const fullImageData = fullCtx.getImageData(0, 0, fullOpacityCanvas.width, fullOpacityCanvas.height);
+                    const fullData = fullImageData.data;
                     
-                    for (let y = 0; y < canvas.height; y++) {
-                        for (let x = 0; x < canvas.width; x++) {
-                            const index = (y * canvas.width + x) * 4;
-                            const alpha = finalData[index + 3];
+                    let fullMinX = fullOpacityCanvas.width, fullMinY = fullOpacityCanvas.height;
+                    let fullMaxX = 0, fullMaxY = 0;
+                    
+                    // Find bounds of the barcode with background
+                    for (let y = 0; y < fullOpacityCanvas.height; y++) {
+                        for (let x = 0; x < fullOpacityCanvas.width; x++) {
+                            const index = (y * fullOpacityCanvas.width + x) * 4;
+                            const alpha = fullData[index + 3];
                             
                             if (alpha > 0) {
-                                finalMinX = Math.min(finalMinX, x);
-                                finalMinY = Math.min(finalMinY, y);
-                                finalMaxX = Math.max(finalMaxX, x);
-                                finalMaxY = Math.max(finalMaxY, y);
+                                fullMinX = Math.min(fullMinX, x);
+                                fullMinY = Math.min(fullMinY, y);
+                                fullMaxX = Math.max(fullMaxX, x);
+                                fullMaxY = Math.max(fullMaxY, y);
                             }
                         }
                     }
                     
-                    // Extract and center the barcode
-                    const finalBarcodeWidth = finalMaxX - finalMinX + 1;
-                    const finalBarcodeHeight = finalMaxY - finalMinY + 1;
-                    const barcodeImageData = ctx.getImageData(finalMinX, finalMinY, finalBarcodeWidth, finalBarcodeHeight);
+                    const fullBarcodeWidth = fullMaxX - fullMinX + 1;
+                    const fullBarcodeHeight = fullMaxY - fullMinY + 1;
                     
-                    // Clear canvas and redraw centered
+                    // Clear main canvas and fill with background color
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    const finalCenterX = (canvas.width - finalBarcodeWidth) / 2;
-                    const finalCenterY = (canvas.height - finalBarcodeHeight) / 2;
-                    ctx.putImageData(barcodeImageData, finalCenterX, finalCenterY);
+                    ctx.fillStyle = backgroundColor;
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    // Calculate center position for the actual barcode size
+                    const fullCenterX = (canvas.width - fullBarcodeWidth) / 2;
+                    const fullCenterY = (canvas.height - fullBarcodeHeight) / 2;
+                    
+                    // Draw the barcode centered
+                    ctx.drawImage(fullOpacityCanvas, fullMinX, fullMinY, fullBarcodeWidth, fullBarcodeHeight, 
+                                 fullCenterX, fullCenterY, fullBarcodeWidth, fullBarcodeHeight);
                 } else {
                     // Full transparency - draw barcode from temp canvas centered
                     ctx.drawImage(tempCanvas, minX, minY, barcodeWidth, barcodeHeight, 

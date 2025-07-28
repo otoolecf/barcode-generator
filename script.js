@@ -119,14 +119,10 @@ function generateBarcode() {
     // Ensure canvas has proper context and dimensions
     const ctx = canvas.getContext('2d');
     
-    // Clear the canvas first to ensure transparency
-    if (canvas.width) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-    } else {
-        // Initialize canvas with minimum dimensions if not set
-        canvas.width = 300;
-        canvas.height = 150;
-    }
+    // First, generate barcode on temporary canvas to measure dimensions
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = 800; // Large initial size for measurement
+    tempCanvas.height = 400;
     
     try {
         const options = {
@@ -168,41 +164,158 @@ function generateBarcode() {
         try {
             console.log('About to call bwipjs.toCanvas synchronously...');
             
-            // Use synchronous API
-            bwipjs.toCanvas(canvas, options);
-            console.log('Barcode generated successfully');
+            // First generate barcode on temp canvas to measure its actual size
+            bwipjs.toCanvas(tempCanvas, options);
+            console.log('Barcode generated on temp canvas for measurement');
+            
+            // Get the actual barcode bounds by scanning the temp canvas
+            const tempCtx = tempCanvas.getContext('2d');
+            const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+            const data = imageData.data;
+            
+            let minX = tempCanvas.width, minY = tempCanvas.height;
+            let maxX = 0, maxY = 0;
+            
+            // Scan for non-transparent pixels to find barcode bounds
+            for (let y = 0; y < tempCanvas.height; y++) {
+                for (let x = 0; x < tempCanvas.width; x++) {
+                    const index = (y * tempCanvas.width + x) * 4;
+                    const alpha = data[index + 3];
+                    
+                    // If pixel is not fully transparent, it's part of the barcode
+                    if (alpha > 0) {
+                        minX = Math.min(minX, x);
+                        minY = Math.min(minY, y);
+                        maxX = Math.max(maxX, x);
+                        maxY = Math.max(maxY, y);
+                    }
+                }
+            }
+            
+            // Calculate barcode dimensions with some padding
+            const barcodeWidth = maxX - minX + 1;
+            const barcodeHeight = maxY - minY + 1;
+            const padding = 20;
+            
+            // Set canvas size to fit the barcode with padding
+            canvas.width = barcodeWidth + (padding * 2);
+            canvas.height = barcodeHeight + (padding * 2);
+            
+            // Clear the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Calculate center position
+            const centerX = (canvas.width - barcodeWidth) / 2;
+            const centerY = (canvas.height - barcodeHeight) / 2;
             
             // Apply transparency to preview for partial opacity
             console.log('Checking transparency condition:', backgroundOpacity > 0 && backgroundOpacity < 1, 'opacity:', backgroundOpacity);
             if (backgroundOpacity > 0 && backgroundOpacity < 1) {
                 console.log('Applying transparency effect...');
-                const ctx = canvas.getContext('2d');
                 
-                // Create temp canvas for barcode without background
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = canvas.width;
-                tempCanvas.height = canvas.height;
+                // Create another temp canvas for barcode without background, same size as temp canvas
+                const transparentCanvas = document.createElement('canvas');
+                transparentCanvas.width = tempCanvas.width;
+                transparentCanvas.height = tempCanvas.height;
                 
                 // Draw barcode with transparent background on temp canvas
                 const transparentOptions = Object.assign({}, options);
                 delete transparentOptions.backgroundcolor;
                 
                 // Generate barcode without background
-                bwipjs.toCanvas(tempCanvas, transparentOptions);
+                bwipjs.toCanvas(transparentCanvas, transparentOptions);
                 
-                // Clear main canvas and draw transparent background using RGBA
+                // Get bounds of the transparent barcode (should be same as original)
+                const transparentCtx = transparentCanvas.getContext('2d');
+                const transparentImageData = transparentCtx.getImageData(0, 0, transparentCanvas.width, transparentCanvas.height);
+                const transparentData = transparentImageData.data;
+                
+                let transMinX = transparentCanvas.width, transMinY = transparentCanvas.height;
+                let transMaxX = 0, transMaxY = 0;
+                
+                // Find bounds of transparent barcode
+                for (let y = 0; y < transparentCanvas.height; y++) {
+                    for (let x = 0; x < transparentCanvas.width; x++) {
+                        const index = (y * transparentCanvas.width + x) * 4;
+                        const alpha = transparentData[index + 3];
+                        
+                        if (alpha > 0) {
+                            transMinX = Math.min(transMinX, x);
+                            transMinY = Math.min(transMinY, y);
+                            transMaxX = Math.max(transMaxX, x);
+                            transMaxY = Math.max(transMaxY, y);
+                        }
+                    }
+                }
+                
+                // Use the transparent barcode bounds for sizing
+                const transBarcodeWidth = transMaxX - transMinX + 1;
+                const transBarcodeHeight = transMaxY - transMinY + 1;
+                
+                // Resize canvas to fit the actual transparent barcode with padding
+                canvas.width = transBarcodeWidth + (padding * 2);
+                canvas.height = transBarcodeHeight + (padding * 2);
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 
-                // Convert hex to RGB and apply alpha
+                // Calculate center position based on new canvas size
+                const transCenterX = (canvas.width - transBarcodeWidth) / 2;
+                const transCenterY = (canvas.height - transBarcodeHeight) / 2;
+                
+                // Convert hex to RGB and apply alpha for background
                 const r = parseInt(backgroundColor.substring(1, 3), 16);
                 const g = parseInt(backgroundColor.substring(3, 5), 16);
                 const b = parseInt(backgroundColor.substring(5, 7), 16);
                 ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${backgroundOpacity})`;
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 
-                // Draw the transparent barcode on top, maintaining positioning
-                ctx.drawImage(tempCanvas, 0, 0);
+                // Draw the transparent barcode centered using the correct bounds
+                ctx.drawImage(transparentCanvas, transMinX, transMinY, transBarcodeWidth, transBarcodeHeight, 
+                             transCenterX, transCenterY, transBarcodeWidth, transBarcodeHeight);
+            } else {
+                // For full opacity or full transparency, draw barcode centered
+                if (backgroundOpacity === 1) {
+                    // Full background - regenerate with background on properly sized canvas
+                    bwipjs.toCanvas(canvas, options);
+                    
+                    // Get the regenerated barcode bounds
+                    const finalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const finalData = finalImageData.data;
+                    
+                    let finalMinX = canvas.width, finalMinY = canvas.height;
+                    let finalMaxX = 0, finalMaxY = 0;
+                    
+                    for (let y = 0; y < canvas.height; y++) {
+                        for (let x = 0; x < canvas.width; x++) {
+                            const index = (y * canvas.width + x) * 4;
+                            const alpha = finalData[index + 3];
+                            
+                            if (alpha > 0) {
+                                finalMinX = Math.min(finalMinX, x);
+                                finalMinY = Math.min(finalMinY, y);
+                                finalMaxX = Math.max(finalMaxX, x);
+                                finalMaxY = Math.max(finalMaxY, y);
+                            }
+                        }
+                    }
+                    
+                    // Extract and center the barcode
+                    const finalBarcodeWidth = finalMaxX - finalMinX + 1;
+                    const finalBarcodeHeight = finalMaxY - finalMinY + 1;
+                    const barcodeImageData = ctx.getImageData(finalMinX, finalMinY, finalBarcodeWidth, finalBarcodeHeight);
+                    
+                    // Clear canvas and redraw centered
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    const finalCenterX = (canvas.width - finalBarcodeWidth) / 2;
+                    const finalCenterY = (canvas.height - finalBarcodeHeight) / 2;
+                    ctx.putImageData(barcodeImageData, finalCenterX, finalCenterY);
+                } else {
+                    // Full transparency - draw barcode from temp canvas centered
+                    ctx.drawImage(tempCanvas, minX, minY, barcodeWidth, barcodeHeight, 
+                                 centerX, centerY, barcodeWidth, barcodeHeight);
+                }
             }
+            
+            console.log('Barcode generated and centered successfully');
             isGenerating = false;
         } catch (bwipjsError) {
             console.error('Error calling bwipjs.toCanvas:', bwipjsError);
